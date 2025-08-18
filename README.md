@@ -1,2 +1,244 @@
-# PyUmbra
-PyUmbra: A Python-Based Umbrella Framework for Weather and Environmental Insights
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather & AQI Report</title>
+<style>
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(to bottom, #e0f7fa, #ffffff);
+        margin: 0;
+        padding: 0;
+        color: #333;
+    }
+    header {
+        background-color: #00796b;
+        color: white;
+        text-align: center;
+        padding: 1rem 0;
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    main {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 1rem;
+        background-color: #f1f8e9;
+        border-radius: 10px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    }
+    input, button {
+        padding: 0.5rem;
+        font-size: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+    button {
+        background-color: #00796b;
+        color: white;
+        border: none;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #004d40;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+    }
+    table, th, td {
+        border: 1px solid #bdbdbd;
+    }
+    th, td {
+        padding: 0.5rem;
+        text-align: left;
+    }
+    th {
+        background-color: #c8e6c9;
+    }
+    .section-title {
+        font-weight: bold;
+        margin-top: 1.5rem;
+        font-size: 1.2rem;
+        color: #00796b;
+    }
+</style>
+</head>
+<body>
+
+<header>Weather & Air Quality Dashboard</header>
+<main>
+    <label for="city">Enter City Name:</label><br>
+    <input type="text" id="city" placeholder="e.g., Mumbai">
+    <button onclick="fetchReport()">Get Report</button>
+
+    <div id="report"></div>
+</main>
+
+<script>
+const OPENWEATHER_API = "2ea555c0e8800f6d30d000bed5888a52";
+
+const helplines = {
+    "IN": "India Helpline: 112 / Police: 100 / Ambulance: 108 / Fire: 101",
+    "GB": "UK Emergency: 999",
+    "US": "USA Emergency: 911",
+    "FR": "France Emergency: 112",
+    "DE": "Germany Emergency: 112",
+    "default": "Local Emergency Number: 112"
+};
+
+// AQI helpers
+function _linearMap(C, Clow, Chigh, Ilow, Ihigh) {
+    return (Ihigh - Ilow) * (C - Clow) / (Chigh - Clow) + Ilow;
+}
+
+function aqiPM25(pm25) {
+    const bps = [
+        [0, 12, 0, 50],
+        [12.1, 35.4, 51, 100],
+        [35.5, 55.4, 101, 150],
+        [55.5, 150.4, 151, 200],
+        [150.5, 250.4, 201, 300],
+        [250.5, 350.4, 301, 400],
+        [350.5, 500.4, 401, 500]
+    ];
+    for (let [Clow, Chigh, Ilow, Ihigh] of bps) {
+        if (pm25 >= Clow && pm25 <= Chigh) {
+            return Math.round(_linearMap(pm25, Clow, Chigh, Ilow, Ihigh));
+        }
+    }
+    return 500;
+}
+
+function aqiPM10(pm10) {
+    const bps = [
+        [0, 54, 0, 50],
+        [55, 154, 51, 100],
+        [155, 254, 101, 150],
+        [255, 354, 151, 200],
+        [355, 424, 201, 300],
+        [425, 504, 301, 400],
+        [505, 604, 401, 500]
+    ];
+    for (let [Clow, Chigh, Ilow, Ihigh] of bps) {
+        if (pm10 >= Clow && pm10 <= Chigh) {
+            return Math.round(_linearMap(pm10, Clow, Chigh, Ilow, Ihigh));
+        }
+    }
+    return 500;
+}
+
+function aqiCategory(index) {
+    if (index <= 50) return "Good";
+    if (index <= 100) return "Moderate";
+    if (index <= 150) return "Unhealthy (Sensitive)";
+    if (index <= 200) return "Unhealthy";
+    if (index <= 300) return "Very Unhealthy";
+    return "Hazardous";
+}
+
+async function fetchReport() {
+    const city = document.getElementById("city").value.trim();
+    if (!city) return alert("Please enter a city name.");
+    const reportDiv = document.getElementById("report");
+    reportDiv.innerHTML = "<p>Loading...</p>";
+
+    try {
+        // Fetch Weather
+        const weatherResp = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${OPENWEATHER_API}&units=metric`);
+        const weather = await weatherResp.json();
+        if (weather.cod !== 200) {
+            reportDiv.innerHTML = "<p>City not found.</p>";
+            return;
+        }
+
+        const { coord, main, weather: weatherArr, wind, sys, name } = weather;
+        const description = weatherArr[0].description;
+        const lat = coord.lat;
+        const lon = coord.lon;
+
+        // Fetch AQI
+        const aqiResp = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API}`);
+        const aqiData = await aqiResp.json();
+        const comp = aqiData.list[0].components;
+        const pm25 = comp.pm2_5;
+        const pm10 = comp.pm10;
+        const aqiIndex = Math.max(aqiPM25(pm25), aqiPM10(pm10));
+
+        // Fetch population
+        const popResp = await fetch(`https://restcountries.com/v3.1/alpha/${sys.country}`);
+        const popData = await popResp.json();
+        const population = popData[0].population;
+
+        // Detect emergencies
+        const emergencies = [];
+        const temp = main.temp;
+        const windSpeed = wind.speed;
+
+        if (/thunderstorm|storm/.test(description) || /heavy/.test(description)) emergencies.push("Severe Storm / Heavy Rain");
+        if (/rain/.test(description) && windSpeed >= 12) emergencies.push("Rain with Strong Wind");
+        if (temp >= 40) emergencies.push("Heatwave");
+        if (temp <= 5) emergencies.push("Cold Wave");
+        if (windSpeed >= 15) emergencies.push("High Wind");
+        if (aqiIndex >= 151) emergencies.push("Severe Air Pollution");
+
+        // Build advisories
+        const advisories = [];
+        if (/rain|storm/.test(description)) advisories.push("Carry umbrella/raincoat", "Avoid flooded roads");
+        if (temp >= 35) advisories.push("Stay hydrated", "Avoid outdoor activity midday");
+        if (temp <= 10) advisories.push("Dress warmly", "Check on elderly/infants");
+        if (windSpeed >= 15) advisories.push("Secure loose outdoor items");
+        if (aqiIndex >= 301) advisories.push("Air hazardous — stay indoors");
+        else if (aqiIndex >= 201) advisories.push("Very unhealthy — use N95 mask");
+        else if (aqiIndex >= 151) advisories.push("Unhealthy — sensitive groups stay inside");
+        else if (aqiIndex >= 101) advisories.push("Moderate — avoid long outdoor exertion");
+        else advisories.push("Air quality acceptable");
+
+        // Trim advisories
+        while (advisories.length < 3) advisories.push("Keep emergency numbers handy.");
+        const contact = helplines[sys.country] || helplines.default;
+
+        // Render report
+        reportDiv.innerHTML = `
+        <div class="section-title">Weather Report</div>
+        <table>
+            <tr><th>City</th><td>${name}, ${sys.country}</td></tr>
+            <tr><th>Condition</th><td>${description}</td></tr>
+            <tr><th>Temperature (°C)</th><td>${temp}</td></tr>
+            <tr><th>Feels Like (°C)</th><td>${main.feels_like}</td></tr>
+            <tr><th>Humidity (%)</th><td>${main.humidity}</td></tr>
+            <tr><th>Wind Speed (m/s)</th><td>${windSpeed}</td></tr>
+            <tr><th>Population</th><td>${population}</td></tr>
+        </table>
+
+        <div class="section-title">Air Quality</div>
+        <table>
+            <tr><th>AQI Index</th><td>${aqiIndex}</td></tr>
+            <tr><th>Category</th><td>${aqiCategory(aqiIndex)}</td></tr>
+        </table>
+        <table>
+            <tr><th>Pollutant</th><th>µg/m³</th></tr>
+            ${Object.entries(comp).map(([k,v]) => `<tr><td>${k.toUpperCase()}</td><td>${v}</td></tr>`).join("")}
+        </table>
+
+        <div class="section-title">Detected Emergencies</div>
+        <ul>${emergencies.map(e => `<li>${e}</li>`).join("")}</ul>
+
+        <div class="section-title">Safety Advisories</div>
+        <ul>${advisories.map(a => `<li>${a}</li>`).join("")}</ul>
+
+        <div class="section-title">Emergency Contacts</div>
+        <p>${contact}</p>
+        `;
+    } catch (err) {
+        reportDiv.innerHTML = `<p>Error fetching data. Try again later.</p>`;
+        console.error(err);
+    }
+}
+</script>
+
+</body>
+</html>
