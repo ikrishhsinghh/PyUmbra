@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weather & AQI Report</title>
+<title>PyUmbra | Weather & AQI Report</title>
 <style>
     body {
         font-family: 'Segoe UI', sans-serif;
@@ -11,6 +11,9 @@
         margin: 0;
         padding: 0;
         color: #333;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
     }
     header {
         background-color: #00796b;
@@ -27,6 +30,7 @@
         background-color: #f1f8e9;
         border-radius: 10px;
         box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+        flex: 1;
     }
     input, button {
         padding: 0.5rem;
@@ -65,11 +69,24 @@
         font-size: 1.2rem;
         color: #00796b;
     }
+    footer {
+        background-color: #00796b;
+        color: white;
+        text-align: center;
+        padding: 1rem 0;
+        font-size: 0.9rem;
+    }
+    footer a {
+        color: #ffffff;
+        text-decoration: underline;
+        margin: 0 0.5rem;
+    }
 </style>
 </head>
 <body>
 
-<header>Weather & Air Quality Dashboard</header>
+<header>PyUmbra | Weather & Air Quality Dashboard</header>
+
 <main>
     <label for="city">Enter City Name:</label><br>
     <input type="text" id="city" placeholder="e.g., Mumbai">
@@ -77,6 +94,13 @@
 
     <div id="report"></div>
 </main>
+
+<footer>
+    © 2025 Krishna K Singh. All rights reserved.  
+    <br>
+    <a href="https://www.linkedin.com/in/ikrishnasinghh/" target="_blank">LinkedIn</a> | 
+    <a href="https://ikrishhsinghh.github.io/Portfolio/" target="_blank">Portfolio</a>
+</footer>
 
 <script>
 const OPENWEATHER_API = "2ea555c0e8800f6d30d000bed5888a52";
@@ -90,7 +114,6 @@ const helplines = {
     "default": "Local Emergency Number: 112"
 };
 
-// AQI helpers
 function _linearMap(C, Clow, Chigh, Ilow, Ihigh) {
     return (Ihigh - Ilow) * (C - Clow) / (Chigh - Clow) + Ilow;
 }
@@ -147,7 +170,6 @@ async function fetchReport() {
     reportDiv.innerHTML = "<p>Loading...</p>";
 
     try {
-        // Fetch Weather
         const weatherResp = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${OPENWEATHER_API}&units=metric`);
         const weather = await weatherResp.json();
         if (weather.cod !== 200) {
@@ -160,7 +182,6 @@ async function fetchReport() {
         const lat = coord.lat;
         const lon = coord.lon;
 
-        // Fetch AQI
         const aqiResp = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API}`);
         const aqiData = await aqiResp.json();
         const comp = aqiData.list[0].components;
@@ -168,12 +189,10 @@ async function fetchReport() {
         const pm10 = comp.pm10;
         const aqiIndex = Math.max(aqiPM25(pm25), aqiPM10(pm10));
 
-        // Fetch population
         const popResp = await fetch(`https://restcountries.com/v3.1/alpha/${sys.country}`);
         const popData = await popResp.json();
         const population = popData[0].population;
 
-        // Detect emergencies
         const emergencies = [];
         const temp = main.temp;
         const windSpeed = wind.speed;
@@ -185,7 +204,6 @@ async function fetchReport() {
         if (windSpeed >= 15) emergencies.push("High Wind");
         if (aqiIndex >= 151) emergencies.push("Severe Air Pollution");
 
-        // Build advisories
         const advisories = [];
         if (/rain|storm/.test(description)) advisories.push("Carry umbrella/raincoat", "Avoid flooded roads");
         if (temp >= 35) advisories.push("Stay hydrated", "Avoid outdoor activity midday");
@@ -197,11 +215,9 @@ async function fetchReport() {
         else if (aqiIndex >= 101) advisories.push("Moderate — avoid long outdoor exertion");
         else advisories.push("Air quality acceptable");
 
-        // Trim advisories
         while (advisories.length < 3) advisories.push("Keep emergency numbers handy.");
         const contact = helplines[sys.country] || helplines.default;
 
-        // Render report
         reportDiv.innerHTML = `
         <div class="section-title">Weather Report</div>
         <table>
